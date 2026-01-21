@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse 
 from phone import wav_to_phone
+from ml_phone import wav_to_IPA
 import os
 from pydub import AudioSegment
 import librosa
@@ -29,7 +30,7 @@ async def get_audio(recording: UploadFile):
     sf.write(wav_recording, x, 16000, subtype="PCM_16")
     
     try:
-        result = wav_to_phone(wav_recording)
+        result = wav_to_IPA(wav_recording)
         print(f"Result: {result}")
 
     finally:
