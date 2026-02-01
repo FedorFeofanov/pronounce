@@ -52,9 +52,10 @@ def get_word_by_id(id):
     if(connection):
         data = execute_query(connection,
                              f'''
-                             select 1 from word where id={id};
-                            ''')
-        return data
+                             select id, word, ipa_uk, audio_uk, ipa_us, audio_us from word where id={id};
+                            ''')[0]
+        word = Word(data[0], data[1], data[2], data[3], data[4], data[5])
+        return word
 
 def get_max_id():
     connection = connect_to_db()
