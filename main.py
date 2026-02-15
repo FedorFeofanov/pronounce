@@ -2,8 +2,7 @@ from fastapi import FastAPI, UploadFile, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from starlette.responses import FileResponse 
-from phone import wav_to_phone
-from ml_phone import wav_to_IPA
+from ml_phone import wav_to_IPA, score_recording
 import os
 from pydub import AudioSegment
 import librosa
@@ -33,6 +32,18 @@ async def read_index(request: Request, id: str):
     }
     return templates.TemplateResponse("index.html", context)
 
+@app.get("/think", response_class=HTMLResponse)
+async def read_index(request: Request):
+    context = {
+        "request": request,
+        "word": "think",
+        "ipa_uk": "/θɪŋk/",
+        "audio_uk": "/media/english/uk_pron_ogg/u/ukt/ukthi/ukthick020.ogg",
+        "ipa_us": "/θɪŋk/",
+        "audio_us": "/media/english/us_pron_ogg/t/thi/think/think.ogg",
+    }
+    return templates.TemplateResponse("think.html", context)
+
 @app.post("/post_audio") #endpoint for getting audio
 async def get_audio(recording: UploadFile):
     raw_recording = "./raw_recording.tmp"
@@ -51,6 +62,37 @@ async def get_audio(recording: UploadFile):
     
     try:
         result = wav_to_IPA(speech_array) # converting speech array to IPA
+        print(f"Result: {result}")
+
+    except:
+        return {"status": "error", "output": ""}
+
+    finally:
+        for path in [raw_recording]:
+            if os.path.exists(path):
+                os.remove(path) # removing temp files
+        return {"status": "success", "output": result}
+
+
+@app.post("/post_think") #endpoint for the prototype
+async def get_audio(recording: UploadFile):
+    raw_recording = "./raw_recording.tmp"
+    result = ""
+
+    content = await recording.read() 
+
+    with open(raw_recording, "wb") as temp_file:
+        temp_file.write(content) # writing the recording into a temp file
+
+    raw_speech_array,_ = librosa.load(raw_recording, sr=16000) # converting audio to speech array
+
+    # reduced_noise_speech_array = nr.reduce_noise(y=raw_speech_array, sr=16000) # reducing noise
+
+    # speech_array, index = librosa.effects.trim(reduced_noise_speech_array, top_db=20) # removing silent parts
+    
+    try:
+        print("starting evaluating score")
+        result = score_recording("think", raw_speech_array)
         print(f"Result: {result}")
 
     except:

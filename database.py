@@ -1,7 +1,8 @@
 import psycopg2
-from models import Word
+from models import Word, Phoneme
 
-def connect_to_db(db_name="pronounce", user="postgres", password="root", host='localhost', port=5432):
+
+def connect_to_db(db_name="phonemes", user="postgres", password="root", host='localhost', port=5432):
     """ Connect to a PostgreSQL database server """
     conn = None
     try:
@@ -17,17 +18,19 @@ def connect_to_db(db_name="pronounce", user="postgres", password="root", host='l
     except psycopg2.DatabaseError as e:
         print(f"Database error: {e}")
         return None
-def execute_query(connection, query):
+def execute_query(connection, query, params=None):
     if connection is None:
         return []
 
     try:
         cursor = connection.cursor()
-        cursor.execute(query)
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
         connection.commit()
         records = []
-        if cursor.description:
-            records = cursor.fetchall()
+        records = cursor.fetchall()
         cursor.close()
         return records
 
@@ -57,15 +60,18 @@ def get_word_by_id(id):
         word = Word(data[0], data[1], data[2], data[3], data[4], data[5])
         return word
 
-def get_max_id():
+def get_phoneme_vector(phoneme, word, limit, sex, user_embedding):
     connection = connect_to_db()
-    if(connection):
-        data = execute_query(connection, f'''
-                                        select MAX(id) from word;
-                                        ''')
-def get_min_id():
-    connection = connect_to_db()
-    if(connection):
-        data = execute_query(connection, f'''
-                                        select MIN(id) from word;
-                                        ''')
+    if connection:
+        query = f'''
+            SELECT id, word, phoneme, embedding, duration, sex, speaker_type, subset,
+                   1 - (embedding <=> %s::vector) AS similarity
+            FROM phoneme_recordings 
+            WHERE word = %s AND phoneme LIKE %s AND sex = %s
+            ORDER BY similarity DESC 
+            LIMIT %s;
+        '''
+        phoneme_pattern = phoneme + "%"
+        data_rows = execute_query(connection, query, (user_embedding, word, phoneme_pattern, sex, limit))
+
+        return data_rows

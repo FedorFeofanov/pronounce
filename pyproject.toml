@@ -7,11 +7,18 @@ requires-python = ">=3.12"
 dependencies = [
     "allosaurus>=1.0.2",
     "fastapi[standard]>=0.128.0",
+    "g2p>=2.3.1",
+    "g2p-en>=2.1.0",
     "librosa>=0.11.0",
     "noisereduce>=3.0.3",
+    "pgvector>=0.4.2",
+    "phonecodes>=2.0.0",
+    "phonemizer>=3.3.0",
+    "protobuf>=6.33.5",
     "psycopg2-binary>=2.9.11",
     "pydub>=0.25.1",
     "soundfile>=0.13.1",
+    "torchaudio>=2.10.0",
     "transformers>=5.0.0",
     "uvicorn>=0.40.0",
 ]
