@@ -7,16 +7,13 @@ from transformers import (
 )
 import torch
 import torchaudio
-import torchaudio.functional as F
 from torchaudio.functional import forced_align
 from g2p import make_g2p
 from database import get_phoneme_vector
 import os
 from pydub import AudioSegment
 import librosa
-import soundfile as sf
 import database
-import noisereduce as nr
 import numpy as np
 from phonecodes import phonecodes
 
@@ -27,7 +24,7 @@ def main():
 
     try:
         print("starting evaluating score")
-        result = score_recording("because", raw_speech_array)
+        result = score_recording("think", raw_speech_array)
         print(f"Result: {result}")
 
     except Exception as e:
@@ -38,9 +35,8 @@ MODEL_ID = "facebook/wav2vec2-lv-60-espeak-cv-ft"
 processor = Wav2Vec2Processor.from_pretrained(MODEL_ID)
 tokenizer = Wav2Vec2CTCTokenizer.from_pretrained(MODEL_ID)
 model = Wav2Vec2ForCTC.from_pretrained(MODEL_ID)
-model2 = Wav2Vec2Model.from_pretrained(MODEL_ID)
-#model.eval()
-    
+# model2 = Wav2Vec2Model.from_pretrained(MODEL_ID)
+
 
 def phone_to_vector(speech_array):
     if len(speech_array) < 400:
@@ -51,7 +47,7 @@ def phone_to_vector(speech_array):
     inputs = processor(speech_array, return_tensors="pt", sampling_rate=16000)
 
     with torch.no_grad():
-        outputs = model2(inputs.input_values, output_hidden_states=True)
+        outputs = model(inputs.input_values, output_hidden_states=True)
         all_layers = outputs.hidden_states 
         last_layer = all_layers[-1]
         vector = last_layer.mean(dim=1).squeeze().cpu().tolist()
