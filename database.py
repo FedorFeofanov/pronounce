@@ -60,6 +60,21 @@ def get_word_by_id(id):
         word = Word(data[0], data[1], data[2], data[3], data[4], data[5])
         return word
 
+def is_valid_phoneme(phoneme, word):
+    connection = connect_to_db()
+    if connection:
+        query = f'''
+            SELECT id 
+            FROM phoneme_recordings
+            WHERE word = %s AND phoneme LIKE %s
+            LIMIT 1;
+        '''
+        phoneme_pattern = phoneme + "%"
+        data_rows = execute_query(connection, query, (word, phoneme_pattern))
+        if data_rows: return True
+        print(f"The phoneme is {phoneme} the word is {word} and it is not in the db")
+        return False
+
 def get_phoneme_vector(phoneme, word, limit, sex, user_embedding):
     connection = connect_to_db()
     if connection:

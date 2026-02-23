@@ -3,13 +3,12 @@ from transformers import (
     Wav2Vec2Processor,
     Wav2Vec2CTCTokenizer,
     Wav2Vec2FeatureExtractor,
-    Wav2Vec2Model
 )
 import torch
 import torchaudio
 from torchaudio.functional import forced_align
 from g2p import make_g2p
-from database import get_phoneme_vector
+from database import get_phoneme_vector, is_valid_phoneme
 import os
 from pydub import AudioSegment
 import librosa
@@ -35,7 +34,6 @@ MODEL_ID = "facebook/wav2vec2-lv-60-espeak-cv-ft"
 processor = Wav2Vec2Processor.from_pretrained(MODEL_ID)
 tokenizer = Wav2Vec2CTCTokenizer.from_pretrained(MODEL_ID)
 model = Wav2Vec2ForCTC.from_pretrained(MODEL_ID)
-# model2 = Wav2Vec2Model.from_pretrained(MODEL_ID)
 
 
 def phone_to_vector(speech_array):
@@ -59,21 +57,13 @@ def get_logits(speech_array):
         return model(inputs.input_values).logits
 
 
-def validate_word(logits, speech_array, word: str) -> bool:
-    predicted_ids = torch.argmax(logits, dim=-1)
-    transcription = processor.batch_decode(predicted_ids)[0]
-    print("The word that the user said", transcription)
-    return word.lower() == transcription.lower()
-    
-
 def compare_phoneme_vec(vector, phoneme, word): # Compare phoneme vector to those in the database
     number_of_rows = 1
     sex = "M"
     arpa_phone = phonecodes.ipa2arpabet(phoneme["phoneme"], "eng")
-    arpa_phone_clean = []
-    for p in arpa_phone:
-        if p[-1].isdigit(): p = p[:-1] # Remove stress numbers
-        arpa_phone_clean.append(p)
+    if arpa_phone[-1].isdigit(): 
+        arpa_phone = arpa_phone[:-1]
+    if not is_valid_phoneme(arpa_phone, word): return 0
     data_rows = get_phoneme_vector(arpa_phone, word, number_of_rows, sex, vector)
     print("PHONEME")
     print(phoneme['phoneme'])
@@ -85,27 +75,18 @@ def compare_phoneme_vec(vector, phoneme, word): # Compare phoneme vector to thos
     
 
 def word_to_phonemes(logits, word: str, total_samples: int): # Split up word into phonemes
-    phonemes = list(g2p(word).output_string)
+    phonemes = processor.batch_decode(torch.argmax(logits, dim=-1))[0].split(" ")
     print(f"Phonemes: {phonemes}")
 
     tokens = processor.tokenizer.convert_tokens_to_ids(phonemes)
-    print(f"Tokens: {tokens}")
-    print(f"Token count: {len(tokens)}")
     log_probs = torch.log_softmax(logits, dim=-1)
-    print(f"Log probs shape: {log_probs.shape}")
     targets = torch.tensor([tokens], dtype=torch.int32)
-    print(f"Targets shape: {targets.shape}")
-    if -1 in tokens or 0 in tokens:
-        print("WARNING: Unknown tokens detected!")
     
     try:
         alignment, scores = forced_align(log_probs, targets)
-        print(f"Alignment type: {type(alignment)}")
-        print(f"Alignment: {alignment}")
     except Exception as e:
         print(f"Forced align error: {e}")
         raise
-    # alignment, scores = forced_align(log_probs, targets)
     STRIDE = 320
     segments = []
     current_token = alignment[0][0].item()
@@ -142,13 +123,10 @@ def phone_to_series(phone, speech_array):
 def score_recording(word, speech_array):
     logits = get_logits(speech_array)
     phoneme_array = word_to_phonemes(logits, word, len(speech_array))
-    print("speech_array")
-    print(len(speech_array))
     sum_scores = 0
     counter = 0
     for phone in phoneme_array:
-        if phone['phoneme'] == '<pad>':
-            continue
+        if phone['phoneme'] == '<pad>': continue
         series = phone_to_series(phone, speech_array)
         print(phone, len(series))
         vector = phone_to_vector(series)
@@ -156,8 +134,7 @@ def score_recording(word, speech_array):
         print(f"Vector score {vector_score}")
         sum_scores += vector_score
         counter += 1
-    return sum_scores / len([p for p in phoneme_array if p['phoneme'] != "<pad>"])
-    # return sum_scores / counter if counter > 0 else 0
+    return sum_scores / counter if counter > 0 else 0
 
 
 if __name__ == "__main__":
