@@ -90,3 +90,15 @@ def get_phoneme_vector(phoneme, word, limit, sex, user_embedding):
         data_rows = execute_query(connection, query, (user_embedding, word, phoneme_pattern, sex, limit))
 
         return data_rows
+
+def is_valid_word(word, sex):
+    connection = connect_to_db()
+    if connection:
+        query = f'''
+            SELECT COUNT(*)
+            FROM phoneme_recordings
+            WHERE word = %s AND sex = %s;
+        '''
+        data_rows = execute_query(connection, query, (word, sex))
+        if not data_rows or data_rows[0][0] < 10: return False
+        return True

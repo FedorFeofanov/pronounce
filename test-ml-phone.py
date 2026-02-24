@@ -17,6 +17,12 @@ import numpy as np
 from phonecodes import phonecodes
 
 
+g2p = make_g2p('eng', 'eng-ipa')
+MODEL_ID = "facebook/wav2vec2-lv-60-espeak-cv-ft"
+processor = Wav2Vec2Processor.from_pretrained(MODEL_ID)
+tokenizer = Wav2Vec2CTCTokenizer.from_pretrained(MODEL_ID)
+model = Wav2Vec2ForCTC.from_pretrained(MODEL_ID)
+
 def main():
     recording = "./think.wav"
     raw_speech_array,_ = librosa.load(recording, sr=16000)
@@ -28,12 +34,6 @@ def main():
 
     except Exception as e:
         print("ERROR", e)
-
-g2p = make_g2p('eng', 'eng-ipa')
-MODEL_ID = "facebook/wav2vec2-lv-60-espeak-cv-ft"
-processor = Wav2Vec2Processor.from_pretrained(MODEL_ID)
-tokenizer = Wav2Vec2CTCTokenizer.from_pretrained(MODEL_ID)
-model = Wav2Vec2ForCTC.from_pretrained(MODEL_ID)
 
 
 def phone_to_vector(speech_array):

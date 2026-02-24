@@ -1,8 +1,8 @@
-from fastapi import FastAPI, UploadFile, Request
+from fastapi import FastAPI, UploadFile, Request, Form, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from starlette.responses import FileResponse 
-from ml_phone import wav_to_IPA, score_recording
+from ml_phone import score_recording
 import os
 from pydub import AudioSegment
 import librosa
@@ -11,58 +11,53 @@ from fastapi.templating import Jinja2Templates
 from models import Word
 import database
 import noisereduce as nr
+import logging
 
+logging.basicConfig(
+    filename='app.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    force = True,
+)
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
-@app.get("/word/{id}", response_class=HTMLResponse)
-async def read_index(request: Request, id: str):
-    word: Word = database.get_word_by_id(id)
-    print(word)
+@app.get("/{sex}/{word}", response_class=HTMLResponse)
+async def read_index(request: Request, sex: str, word: str):
+    is_valid_word = database.is_valid_word(word, sex.upper())
+    if not is_valid_word: return f"<html><h1>we don't know the word {word} yet, sorry!<h1><html>"
     context = {
         "request": request,
-        "word": word.word,
-        "ipa_uk": word.ipa_uk,
-        "audio_uk": word.audio_uk,
-        "ipa_us": word.ipa_us,
-        "audio_us": word.audio_us,
+        "word": word,
+        #"ipa_uk": word.ipa_uk,
+        #"audio_uk": word.audio_uk,
+        #"ipa_us": word.ipa_us,
+        #"audio_us": word.audio_us,
     }
     return templates.TemplateResponse("index.html", context)
 
-@app.get("/think", response_class=HTMLResponse)
-async def read_index(request: Request):
-    context = {
-        "request": request,
-        "word": "think",
-        "ipa_uk": "/θɪŋk/",
-        "audio_uk": "/media/english/uk_pron_ogg/u/ukt/ukthi/ukthick020.ogg",
-        "ipa_us": "/θɪŋk/",
-        "audio_us": "/media/english/us_pron_ogg/t/thi/think/think.ogg",
-    }
-    return templates.TemplateResponse("think.html", context)
 
 @app.post("/post_audio") #endpoint for getting audio
-async def get_audio(recording: UploadFile):
+async def get_audio(recording: UploadFile = File(...), sex: str = Form(...), word: str = Form(...)):
+    logging.info(f"Post received for the word {word}")
     raw_recording = "./raw_recording.tmp"
-    result = ""
+    score = 0
 
-    content = await recording.read() # getting the recording
+    recording = await recording.read() # getting the recording
 
     with open(raw_recording, "wb") as temp_file:
-        temp_file.write(content) # writing the recording into a temp file
-
+        temp_file.write(recording) # writing the recording into a temp file
     raw_speech_array,_ = librosa.load(raw_recording, sr=16000) # converting audio to speech array
-
     reduced_noise_speech_array = nr.reduce_noise(y=raw_speech_array, sr=16000) # reducing noise
-
     speech_array, index = librosa.effects.trim(reduced_noise_speech_array, top_db=20) # removing silent parts
     
+    logging.info("trying to get the score")
     try:
-        result = wav_to_IPA(speech_array) # converting speech array to IPA
-        print(f"Result: {result}")
+        score = score_recording(speech_array, sex.upper(), word)
+        logging.info(f"Result: {score}")
 
     except:
         return {"status": "error", "output": ""}
@@ -71,36 +66,5 @@ async def get_audio(recording: UploadFile):
         for path in [raw_recording]:
             if os.path.exists(path):
                 os.remove(path) # removing temp files
-        return {"status": "success", "output": result}
-
-
-@app.post("/post_think") #endpoint for the prototype
-async def get_audio(recording: UploadFile):
-    raw_recording = "./raw_recording.tmp"
-    result = ""
-
-    content = await recording.read() 
-
-    with open(raw_recording, "wb") as temp_file:
-        temp_file.write(content) # writing the recording into a temp file
-
-    raw_speech_array,_ = librosa.load(raw_recording, sr=16000) # converting audio to speech array
-
-    # reduced_noise_speech_array = nr.reduce_noise(y=raw_speech_array, sr=16000) # reducing noise
-
-    # speech_array, index = librosa.effects.trim(reduced_noise_speech_array, top_db=20) # removing silent parts
-    
-    try:
-        print("starting evaluating score")
-        result = score_recording("think", raw_speech_array)
-        print(f"Result: {result}")
-
-    except:
-        return {"status": "error", "output": ""}
-
-    finally:
-        for path in [raw_recording]:
-            if os.path.exists(path):
-                os.remove(path) # removing temp files
-        return {"status": "success", "output": result}
+        return {"status": "success", "output": score}
 

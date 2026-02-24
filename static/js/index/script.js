@@ -26,9 +26,14 @@ if (mediaRecorder && mediaRecorder.state === "recording") {
     console.log("Recording stopped.");
 
     mediaRecorder.onstop = async () => {
+    const path = window.location.pathname;
+    const parts = path.split("/").filter(part => part.length > 0);
+    const [sex, word] = parts;
     const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
     const formData = new FormData();
     formData.append('recording', audioBlob, 'recording.wav');
+    formData.append("sex", sex)
+    formData.append("word", word)
 
     try {
         const response = await fetch('/post_audio', {
@@ -37,6 +42,7 @@ if (mediaRecorder && mediaRecorder.state === "recording") {
         });
         if (response.ok){
         const data = await response.json();
+        console.log(data);
         document.getElementById('user_pronounciation').innerText = data.output;
         } else {
         document.getElementById('user_pronounciation').innerText = "server error :(";
